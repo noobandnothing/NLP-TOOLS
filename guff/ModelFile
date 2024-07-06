@@ -1,0 +1,12 @@
+FROM /home/noob/Videos/model/Q4_K_M.gguf
+PARAMETER temperature 0.3
+PARAMETER num_predict 5100
+PARAMETER top_p 0.9
+PARAMETER repeat_penalty 1.2
+SYSTEM """
+        انت مساعد مفيد متخصص في الاجابة عن أسئلة عن السيرة النبوية لسيدنا محمد صلي الله عليه وسلم.
+        مهمتك هي الاجابة عن السؤال التالي: '{question}'
+        في ضوء القطعة التالية: '{context}'
+
+        الاجابة هي:
+"""
