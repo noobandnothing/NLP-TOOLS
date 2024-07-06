@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+https://colab.research.google.com/drive/1qECwsKlvip-oXKhjoE0aM1PmuSMwvjdB
+"""
+!git clone https://github.com/aub-mind/arabert
+################################################################################################################################
+from transformers import AutoTokenizer, AutoModel
+from arabert.preprocess import ArabertPreprocessor
+import torch
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+import re
+
+################################################################################################################################
+# FUNCTION
+def get_sent_emb(model_outputs, attention_mask):
+  cls_embeddings = model_outputs[0][:, 0, :] # Ignore this if you are using mean pooling instead of the CLS token
+  token_embeddings = model_outputs[0][:, 1:-1, :] # don't include the embeddings of the first and last token ( CLS and SEP )
+  input_mask_expanded = (
+            attention_mask[:, 1:-1]  # don't include the embeddings of the first and last token ( CLS and SEP )
+            .unsqueeze(-1)
+            .expand(token_embeddings.size())
+            .float()
+        )
+  mean_emb = torch.mean(token_embeddings * input_mask_expanded, 1)
+  return mean_emb.detach().numpy()
+# ------------------------------------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------------
+
+def get_most_similar_index(query_text):
+  query_text_preprocessed = arabert_prep.preprocess(query_text)
+  query_inputs = tokenizer.encode_plus(query_text_preprocessed, return_tensors='pt')
+  with torch.no_grad():
+    query_outputs = model(**query_inputs)
+  query_mean_emb = get_sent_emb(query_outputs, query_inputs['attention_mask'])
+  similarity_matrix = cosine_similarity(query_mean_emb, emb_dataset)
+  if np.argmax(similarity_matrix) >= 0.65:
+      most_similar = text_dataset[np.argmax(similarity_matrix)]
+      return most_similar, similarity_matrix
+  else:
+      return None
+      # return None , similarity_matrix // DEBUG
+# ------------------------------------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------------  
+    
+def remove_tashkeel_from_list(texts):
+    def remove_tashkeel(text):
+        tashkeel = u'\u0617-\u061A\u064B-\u0652'  # Range of Arabic diacritics
+        pattern = "[" + tashkeel + "]"
+        return re.sub(pattern, '', text)
+    texts_without_tashkeel = [remove_tashkeel(text) for text in texts]
+    return texts_without_tashkeel
+
+
+################################################################################################################################
+# model_name = "aubmindlab/bert-base-arabertv02"
+model_name = "aubmindlab/bert-large-arabertv2"
+arabert_prep = ArabertPreprocessor(model_name=model_name,apply_farasa_segmentation=True)
+model = AutoModel.from_pretrained(model_name)
+model.eval()
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+# ------------------------------------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------------
+# DATASET
+
+text_dataset =  [
+"كراهة تغميض العينين في الصلاة",
+"يَقُول بَعْدَ انْصِرَافِهِ مِنَ الصَّلَاةِ",
+"السُّتْرَةُ فِي الصَّلَاةِ",
+"السُّنَنِ الرَّوَاتِبِ",
+" اضطجاعه بَعْدَ سُنَّةِ الْفَجْرِ عَلَى شِقِّهِ الْأَيْمَنِ",
+"قِيَامِ اللَّيْلِ",
+"سِيَاقِ صَلَاتِهِ بِاللَّيْلِ وَوِتْرِهِ وَذِكْرِ صَلَاةِ أَوَّلِ اللَّيْلِ",
+"الرَّكْعَتَانِ بَعْدَ الْوِتْرِ",
+"قُنُوتُ الْوِتْرِ",
+"صَلَاةِ الضُّحَى",
+"سُجُودُ"  
+]
+text_dataset = remove_tashkeel_from_list(text_dataset)
+# build the embedding dataset
+emb_dataset = np.zeros((len(text_dataset),1024))
+for id, text in enumerate(text_dataset):
+  text_preprocessed = arabert_prep.preprocess(text)
+  inputs = tokenizer.encode_plus(text_preprocessed, return_tensors='pt')
+  with torch.no_grad():
+    outputs = model(**inputs)
+  mean_emb = get_sent_emb(outputs, inputs['attention_mask'])
+  emb_dataset[id,:] = mean_emb
+
+print(emb_dataset)
+
+# ------------------------------------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------------
+# QUERY
+# text= "تغميض العينين"
+text= "النوم بعد سنة الفجر"
+text_preprocessed = arabert_prep.preprocess(text)
+print(text)
+print("---------------------")
+print(text_preprocessed)
+#inputs is a dictionary containing inputs_ids, attention_masks and token_type_ids as pytorch tensors
+inputs = tokenizer.encode_plus(text_preprocessed, return_tensors='pt')
+print(inputs['input_ids'][0])
+print(tokenizer.convert_ids_to_tokens(inputs['input_ids'][0]))# some tokens might be split with ## by the tokenizer
+outputs = model(**inputs)
+
+# ------------------------------------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------------
+# GET NEAREST PART
+
+match = get_most_similar_index(text)
+if match:
+    print("FOUND MATCHING : " + match[0])
+else:
+    print("No MATCHING")
+
+################################################################################################################################
+# ------------------------------------------------------------------------------------------------------------------------------
+################################################################################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+#text= "الأمم المتحدة الرسمية"
+# text= "الأمم المتحدة الرسمية ؟"
+# text_preprocessed = arabert_prep.preprocess(text)
+# print(text)
+# print("---------------------")
+# print(text_preprocessed)
+# #inputs is a dictionary containing inputs_ids, attention_masks and token_type_ids as pytorch tensors
+# inputs = tokenizer.encode_plus(text_preprocessed, return_tensors='pt')
+# print(inputs['input_ids'][0])
+# print(tokenizer.convert_ids_to_tokens(inputs['input_ids'][0]))# some tokens might be split with ## by the tokenizer
